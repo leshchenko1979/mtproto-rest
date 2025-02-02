@@ -4,16 +4,15 @@ A REST API server built with FastAPI that provides access to Telegram MTProto fu
 
 ## Features
 
-- Search through Telegram contacts
-- Search through Telegram chats with advanced filtering:
-  - Date range filtering
-  - Chat type filtering (private chats, groups, channels)
+- Search through Telegram contacts and chats
 - Support for multiple Telegram accounts
 - MTProto-based secure communication with Telegram servers
 - RESTful API endpoints with FastAPI
 - Comprehensive logging with Logfire integration
 - Auto-generated OpenAPI documentation
-- Containerized deployment with Docker
+- Containerized deployment with Docker and Traefik integration
+- Health monitoring endpoints
+- Resource management and limits
 
 ## Prerequisites
 
@@ -21,6 +20,7 @@ A REST API server built with FastAPI that provides access to Telegram MTProto fu
 - Telegram API credentials (api_id and api_hash)
 - Active Telegram account(s)
 - Logfire account and API key
+- Traefik reverse proxy setup (for production deployment)
 
 ## Installation
 
@@ -39,7 +39,7 @@ cd rest_tg
 docker compose up --build
 ```
 
-The API will be available at `http://localhost:8000`
+The API will be available at `http://localhost:8000` in development mode, or through your Traefik configuration in production.
 
 ### Manual Installation
 
@@ -99,16 +99,46 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 2. The API will be available at `http://localhost:8000`
 3. Access the interactive API documentation at `http://localhost:8000/docs`
 
-## Docker Volume Management
+## Docker Configuration
 
+The application is configured with the following features:
+
+### Resource Limits and Optimization
+- Minimal resource usage:
+  - CPU: Maximum 0.5 cores, minimum 0.1 cores
+  - Memory: Maximum 256MB, minimum 128MB
+- Python optimization level 2 enabled
+- Worker configuration:
+  - 2 Uvicorn workers
+  - 100 concurrent connections limit
+  - Optimized keep-alive settings
+- Log rotation:
+  - Maximum 10MB per file
+  - 3 files rotation policy
+
+### Volumes
 The application uses Docker volumes to persist:
-- Telegram session files
-- Application logs
-- Configuration files
+- `telegram_sessions`: Stores Telegram session files
+- `logs`: Stores application logs
 
-Volumes are automatically created and managed by Docker Compose.
+### Health Checks
+- Endpoint: `/health`
+- Interval: 30 seconds
+- Timeout: 10 seconds
+- Retries: 3
+
+### Traefik Integration
+- Automatic SSL termination
+- Load balancing
+- Reverse proxy configuration
 
 ## API Endpoints
+
+### Health Check
+```
+GET /health
+- Check the application health status
+```
 
 ### Account Management
 ```
@@ -122,30 +152,24 @@ DELETE /api/accounts/{account_id}
 - Remove an account
 ```
 
-### Search Contacts
+### Search Operations
 ```
 GET /api/search/contacts
 Query Parameters:
 - session_id: ID of the Telegram account to use
 - query: Search query string
 - limit: Maximum number of results to return (default: 50)
-```
 
-### Search Chats
-```
 GET /api/search/chats
 Query Parameters:
 - session_id: ID of the Telegram account to use
 - query: Search query string
-- chat_type: Filter by chat type (private, group, channel, all)
-- start_date: Filter messages from this date (ISO format)
-- end_date: Filter messages until this date (ISO format)
 - limit: Maximum number of results to return (default: 50)
 ```
 
 ## Logging
 
-The application uses Logfire for comprehensive logging:
+The application uses Logfire with FastAPI integration for comprehensive logging:
 - API endpoint access and performance metrics
 - Search operations and results
 - Account management events
@@ -159,16 +183,16 @@ Configure your Logfire dashboard to monitor:
 
 ## Security Considerations
 
-- Store API credentials securely using Docker secrets or environment variables
-- Use environment variables for sensitive data
+- Store API credentials securely using environment variables
 - Implement proper authentication for API endpoints
 - Follow Telegram's terms of service and API usage guidelines
 - Regularly rotate API keys and credentials
-- Ensure proper Docker container security practices:
+- Docker security best practices:
   - Use non-root user in container
   - Keep base images updated
   - Scan for vulnerabilities
-  - Limit container resources
+  - Resource limits enforcement
+  - Secure volume management
 
 ## License
 

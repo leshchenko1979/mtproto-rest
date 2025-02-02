@@ -26,14 +26,21 @@ FROM python:3.12-alpine
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONOPTIMIZE=2
+    PYTHONOPTIMIZE=2 \
+    WORKERS=2 \
+    WORKER_CLASS=uvicorn.workers.UvicornWorker \
+    MAX_REQUESTS=1000 \
+    MAX_REQUESTS_JITTER=50 \
+    KEEP_ALIVE=75 \
+    GRACEFUL_TIMEOUT=10
 
 # Create non-root user
 RUN adduser -D appuser
 
-# Create necessary directories
+# Create necessary directories and clean up
 RUN mkdir -p /app/sessions /app/logs && \
-    chown -R appuser:appuser /app
+    chown -R appuser:appuser /app && \
+    rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
 WORKDIR /app
 
@@ -50,4 +57,14 @@ USER appuser
 EXPOSE 8000
 
 # Run the application with optimizations
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+CMD ["uvicorn", "main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "2", \
+     "--no-access-log", \
+     "--proxy-headers", \
+     "--forwarded-allow-ips", "*", \
+     "--no-server-header", \
+     "--limit-concurrency", "100", \
+     "--backlog", "100", \
+     "--timeout-keep-alive", "75"]
