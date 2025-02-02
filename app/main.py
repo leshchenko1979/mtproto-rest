@@ -26,7 +26,7 @@ def create_app() -> FastAPI:
     )
 
     # Include routers
-    from .routes import auth, search
+    from app.routes import auth, search
     app.include_router(auth.router)
     app.include_router(search.router)
 
