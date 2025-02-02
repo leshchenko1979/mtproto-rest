@@ -40,5 +40,5 @@ async def health_check():
     return {
         "status": "ok",
         "version": app.version,
-        "logfire_enabled": bool(os.getenv("LOGFIRE_API_KEY"))
+        "logfire_enabled": bool(os.getenv("LOGFIRE_TOKEN"))
     }
