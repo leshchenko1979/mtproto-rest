@@ -8,7 +8,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ secrets.ENV_NAME }}
+    environment: redevest.ru
     steps:
       - uses: actions/checkout@v3
 
