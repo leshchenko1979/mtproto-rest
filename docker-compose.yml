@@ -11,8 +11,11 @@ services:
       - TZ=UTC
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`rest-tg.redevest.com`)"
-      - "traefik.http.services.api.loadbalancer.server.port=8000"
+      - "traefik.http.routers.rest-tg.rule=Host(`rest-tg.redevest.ru`)"
+      - "traefik.http.routers.rest-tg.entrypoints=websecure"
+      - "traefik.http.routers.rest-tg.tls=true"
+      - "traefik.http.routers.rest-tg.tls.certresolver=cloudflare"
+      - "traefik.http.services.rest-tg.loadbalancer.server.port=8000"
     networks:
       - traefik-public
     healthcheck:
