@@ -27,7 +27,7 @@
         {
             "label": "Build and Run Docker",
             "type": "shell",
-            "command": "docker-compose up --build",
+            "command": "docker compose up --build",
             "group": {
                 "kind": "build",
                 "isDefault": false
@@ -59,7 +59,7 @@
             "command": "bash",
             "args": [
                 "-c",
-                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker-compose logs -f'"
+                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker compose logs -f'"
             ],
             "group": {
                 "kind": "build",
@@ -78,7 +78,7 @@
             "command": "bash",
             "args": [
                 "-c",
-                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker-compose ps'"
+                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker compose ps'"
             ],
             "group": {
                 "kind": "build",
