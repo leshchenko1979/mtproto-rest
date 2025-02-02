@@ -7,7 +7,7 @@
             "dependsOn": ["Run FastAPI Server"],
             "group": {
                 "kind": "build",
-                "isDefault": true
+                "isDefault": false
             }
         },
         {
@@ -27,6 +27,10 @@
                 "env": {
                     "PYTHONUNBUFFERED": "1"
                 }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
             }
         },
         {
@@ -38,7 +42,11 @@
                 "panel": "new",
                 "clear": true
             },
-            "problemMatcher": []
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
         },
         {
             "label": "Docker: Stop",
@@ -49,7 +57,11 @@
                 "panel": "new",
                 "clear": true
             },
-            "problemMatcher": []
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
         },
         {
             "label": "Deploy to Production",
@@ -60,47 +72,73 @@
                 "panel": "shared",
                 "clear": true
             },
-            "problemMatcher": []
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
         },
         {
             "label": "SSH: Connect to Production",
-            "type": "shell",
-            "command": "bash",
+            "type": "process",
+            "command": "ssh",
             "args": [
-                "-c",
-                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST"
-            ],
-            "problemMatcher": []
-        },
-        {
-            "label": "SSH: View Logs",
-            "type": "shell",
-            "command": "bash",
-            "args": [
-                "-c",
-                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker compose logs -f'"
-            ],
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated",
-                "clear": true
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "SSH: Check Status",
-            "type": "shell",
-            "command": "bash",
-            "args": [
-                "-c",
-                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker compose ps'"
+                "-o",
+                "IdentitiesOnly=yes",
+                "root@94.250.254.232"
             ],
             "presentation": {
                 "reveal": "always",
                 "panel": "shared",
                 "clear": true
             },
-            "problemMatcher": []
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "SSH: View Logs",
+            "type": "process",
+            "command": "ssh",
+            "args": [
+                "-o",
+                "IdentitiesOnly=yes",
+                "root@94.250.254.232",
+                "cd /opt/rest_tg && docker compose logs -f"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "SSH: Check Status",
+            "type": "process",
+            "command": "ssh",
+            "args": [
+                "-o",
+                "IdentitiesOnly=yes",
+                "root@94.250.254.232",
+                "cd /opt/rest_tg && docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+            ],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
         }
     ]
 }

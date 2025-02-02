@@ -35,6 +35,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     GRACEFUL_TIMEOUT=10 \
     PATH="/usr/local/bin:$PATH"
 
+# Install curl for health checks
+RUN apk add --no-cache curl
+
 # Create non-root user
 RUN adduser -D appuser
 
@@ -62,7 +65,7 @@ USER appuser
 EXPOSE 8000
 
 # Run the application with optimizations
-CMD ["uvicorn", "main:app", \
+CMD ["uvicorn", "app.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8000", \
      "--workers", "2", \
