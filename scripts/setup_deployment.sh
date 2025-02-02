@@ -15,4 +15,4 @@ cp .env.example /opt/rest_tg/.env
 
 # Initial deployment
 cd /opt/rest_tg
-docker-compose up -d --build
+docker compose up -d --build

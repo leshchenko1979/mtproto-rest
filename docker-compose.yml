@@ -13,7 +13,6 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=Host(`rest-tg.redevest.com`)"
       - "traefik.http.services.api.loadbalancer.server.port=8000"
-      - "autoexit.idle_time=300"  # 5 minutes in seconds
     networks:
       - traefik-public
     healthcheck:
@@ -29,14 +28,6 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-
-  autoexit:
-    image: qmcgaw/idle-container:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - LABEL=autoexit.idle_time
-    restart: always
 
 networks:
   traefik-public:
