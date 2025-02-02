@@ -32,7 +32,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MAX_REQUESTS=1000 \
     MAX_REQUESTS_JITTER=50 \
     KEEP_ALIVE=75 \
-    GRACEFUL_TIMEOUT=10
+    GRACEFUL_TIMEOUT=10 \
+    PATH="/usr/local/bin:$PATH"
 
 # Create non-root user
 RUN adduser -D appuser
@@ -44,8 +45,9 @@ RUN mkdir -p /app/sessions /app/logs && \
 
 WORKDIR /app
 
-# Copy installed packages from builder
+# Copy Python packages and executables from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
 # Copy application code
 COPY --chown=appuser:appuser . .
