@@ -6,7 +6,7 @@ services:
     volumes:
       - telegram_sessions:/app/sessions
       - logs:/app/logs
-      - .env:/app/.env:ro
+      - ${PWD}/.env:/app/.env:ro
     environment:
       - TZ=UTC
     labels:

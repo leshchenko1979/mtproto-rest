@@ -52,6 +52,9 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 # Copy application code
 COPY --chown=appuser:appuser . .
 
+# Create empty .env file if not mounted
+RUN touch .env && chown appuser:appuser .env
+
 # Switch to non-root user
 USER appuser
 
