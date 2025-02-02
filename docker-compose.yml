@@ -1,0 +1,49 @@
+services:
+  api:
+    build: .
+    expose:
+      - "8000"
+    volumes:
+      - telegram_sessions:/app/sessions
+      - logs:/app/logs
+      - .env:/app/.env:ro
+    environment:
+      - TZ=UTC
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=Host(`rest-tg.redevest.com`)"
+      - "traefik.http.services.api.loadbalancer.server.port=8000"
+      - "autoexit.idle_time=300"  # 5 minutes in seconds
+    networks:
+      - traefik-public
+    healthcheck:
+      test: ["CMD", "python", "-c", "import http.client; conn = http.client.HTTPConnection('localhost:8000'); conn.request('GET', '/health'); response = conn.getresponse(); exit(0 if response.status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  autoexit:
+    image: qmcgaw/idle-container:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - LABEL=autoexit.idle_time
+    restart: always
+
+networks:
+  traefik-public:
+    external: true
+
+volumes:
+  telegram_sessions:
+    name: rest_tg_sessions
+  logs:
+    name: rest_tg_logs

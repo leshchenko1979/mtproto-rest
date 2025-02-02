@@ -1,0 +1,110 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run FastAPI Server",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "run.py"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "clear": true
+            },
+            "problemMatcher": [],
+            "options": {
+                "env": {
+                    "PYTHONUNBUFFERED": "1"
+                }
+            }
+        },
+        {
+            "label": "Build and Run Docker",
+            "type": "shell",
+            "command": "docker-compose up --build",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "SSH: Connect to Production",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "SSH: View Logs",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker-compose logs -f'"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "SSH: Check Status",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker-compose ps'"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Deploy to Production",
+            "type": "shell",
+            "command": "git push origin main",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
