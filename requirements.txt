@@ -3,6 +3,6 @@ uvicorn
 pyrogram
 tgcrypto
 pydantic
-python-dotenv
+pydantic-settings
 httpx
 logfire[fastapi]

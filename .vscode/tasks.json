@@ -2,16 +2,21 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Local Development",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Run FastAPI Server"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
             "label": "Run FastAPI Server",
             "type": "shell",
             "command": "python",
             "args": [
                 "run.py"
             ],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
             "presentation": {
                 "reveal": "always",
                 "panel": "new",
@@ -25,16 +30,34 @@
             }
         },
         {
-            "label": "Build and Run Docker",
+            "label": "Docker: Start",
             "type": "shell",
             "command": "docker compose up --build",
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
             "presentation": {
                 "reveal": "always",
                 "panel": "new",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Docker: Stop",
+            "type": "shell",
+            "command": "docker compose down",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "clear": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Deploy to Production",
+            "type": "shell",
+            "command": "chmod +x ./scripts/deploy.sh && ./scripts/deploy.sh",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
                 "clear": true
             },
             "problemMatcher": []
@@ -47,10 +70,6 @@
                 "-c",
                 "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST"
             ],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
             "problemMatcher": []
         },
         {
@@ -61,10 +80,6 @@
                 "-c",
                 "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker compose logs -f'"
             ],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
             "presentation": {
                 "reveal": "always",
                 "panel": "dedicated",
@@ -80,25 +95,6 @@
                 "-c",
                 "source .env && ssh $DEPLOY_USER@$DEPLOY_HOST 'cd $DEPLOY_PATH && docker compose ps'"
             ],
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared",
-                "clear": true
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "Deploy to Production",
-            "type": "shell",
-            "command": "git push origin main",
-            "group": {
-                "kind": "build",
-                "isDefault": false
-            },
             "presentation": {
                 "reveal": "always",
                 "panel": "shared",

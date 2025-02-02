@@ -1,6 +1,25 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables"""
+    # Telegram credentials
+    API_ID: int
+    API_HASH: str
+
+    # Logfire settings
+    LOGFIRE_TOKEN: str | None = None
+
+    # Server settings
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
@@ -11,7 +30,7 @@ def create_app() -> FastAPI:
     )
 
     # Configure Logfire if API key is present
-    if os.getenv("LOGFIRE_TOKEN"):
+    if settings.LOGFIRE_TOKEN:
         import logfire
         logfire.configure(environment="production")
         logfire.instrument_fastapi(app)
@@ -40,5 +59,5 @@ async def health_check():
     return {
         "status": "ok",
         "version": app.version,
-        "logfire_enabled": bool(os.getenv("LOGFIRE_TOKEN"))
+        "logfire_enabled": bool(settings.LOGFIRE_TOKEN)
     }

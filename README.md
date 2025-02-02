@@ -19,68 +19,54 @@ A REST API server built with FastAPI that provides access to Telegram MTProto fu
 - Docker and Docker Compose
 - Telegram API credentials (api_id and api_hash)
 - Active Telegram account(s)
-- Logfire account and API key
+- Logfire account and API token
 - Traefik reverse proxy setup (for production deployment)
 
-## Installation
+## Environment Setup
 
-### Using Docker (Recommended)
+Create a `.env` file in the project root with the following variables:
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/rest_tg.git
-cd rest_tg
-```
-
-2. Create a `.env` file with your configuration (see Configuration section)
-
-3. Build and run the Docker container:
-```bash
-docker compose up --build
-```
-
-The API will be available at `http://localhost:8000` in development mode, or through your Traefik configuration in production.
-
-### Manual Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/rest_tg.git
-cd rest_tg
-```
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Configure your Telegram API credentials:
-   - Create an application on [Telegram's developer portal](https://my.telegram.org/apps)
-   - Save your `api_id` and `api_hash`
-
-## Configuration
-
-Create a `.env` file in the project root with the following content:
-```
-# Telegram API credentials
+```env
+# Telegram API Credentials
 API_ID=your_api_id
 API_HASH=your_api_hash
 
-# Server configuration
+# Logfire Integration
+LOGFIRE_TOKEN=your_logfire_token
+
+# Server Configuration
 HOST=0.0.0.0
 PORT=8000
 
-# Logging
-LOGFIRE_API_KEY=your_logfire_api_key
+# Deployment Configuration
+DEPLOY_HOST=your_server_hostname
+DEPLOY_USER=your_server_username
+DEPLOY_PATH=/path/to/deployment/directory
 ```
 
-## Usage
+## Development
 
-### Running with Docker
+### Local Development
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/rest_tg.git
+   cd rest_tg
+   ```
 
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Run the server:
+   ```bash
+   python run.py
+   ```
+
+### Docker Development
 ```bash
 # Start the service
-docker compose up -d
+docker compose up --build
 
 # View logs
 docker compose logs -f
@@ -89,19 +75,48 @@ docker compose logs -f
 docker compose down
 ```
 
-### Running Manually
+## Deployment
 
-1. Start the FastAPI server:
-```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
+### Direct Deployment
+The project includes a deployment script that packages and deploys the application directly to your server:
 
-2. The API will be available at `http://localhost:8000`
-3. Access the interactive API documentation at `http://localhost:8000/docs`
+1. Ensure your `.env` file is properly configured with deployment variables
+2. Run the deployment script:
+   ```bash
+   ./scripts/deploy.sh
+   ```
+
+The script will:
+- Package the application (including .env file)
+- Copy it to your server
+- Deploy using Docker Compose
+
+### VS Code Tasks
+The project includes several VS Code tasks organized by category:
+
+#### Development Tasks
+- `Local Development`: Default task that runs the FastAPI server
+- `Run FastAPI Server`: Runs the server directly with Python
+
+#### Docker Tasks
+- `Docker: Start`: Builds and starts the Docker containers
+- `Docker: Stop`: Stops and removes the Docker containers
+
+#### Deployment Tasks
+- `Deploy to Production`: Deploys the application using the deployment script
+  - Note: The script will be automatically made executable when running this task
+
+#### SSH Tasks
+- `SSH: Connect to Production`: Opens an SSH connection to the production server
+- `SSH: View Logs`: Shows Docker Compose logs from the production server
+- `SSH: Check Status`: Displays the status of Docker containers on the production server
+
+To use these tasks in VS Code:
+1. Press `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (macOS)
+2. Type "Tasks: Run Task"
+3. Select the desired task from the list
 
 ## Docker Configuration
-
-The application is configured with the following features:
 
 ### Resource Limits and Optimization
 - Minimal resource usage:
@@ -169,7 +184,7 @@ Query Parameters:
 
 ## Logging
 
-The application uses Logfire with FastAPI integration for comprehensive logging:
+The application uses Logfire's FastAPI integration for comprehensive logging:
 - API endpoint access and performance metrics
 - Search operations and results
 - Account management events
