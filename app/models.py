@@ -1,5 +1,5 @@
-from typing import Optional, Union, Literal, List
-from pydantic import BaseModel, field_validator, Field
+from typing import Optional, Union, Literal, List, Annotated
+from pydantic import BaseModel, field_validator, Field, WithJsonSchema
 from datetime import datetime
 import re
 
@@ -8,18 +8,33 @@ PHONE_PATTERN = re.compile(r'^\+?[1-9]\d{1,14}$')
 
 class PhoneNumber(BaseModel):
     """Base model for phone number validation"""
-    phone_number: Union[str, int] = Field(..., description="Phone number in E.164 format")
+    phone_number: Annotated[Union[str, int], Field(description="Phone number in E.164 format")]
 
     @field_validator('phone_number')
     @classmethod
     def validate_phone(cls, v: Union[str, int]) -> str:
         """Validate and normalize phone number to E.164 format"""
-        if isinstance(v, int):
-            v = str(v)
-        v = re.sub(r'[\s-]', '', v)
+        # Convert to string if it's a number
+        if isinstance(v, (int, float)):
+            v = str(int(v))  # Convert to int first to remove any decimals
+
+        # Clean the string
+        v = re.sub(r'[\s-]', '', str(v))
+
         if not PHONE_PATTERN.match(v):
             raise ValueError('Invalid phone number format. Must be in E.164 format')
         return '+' + v.lstrip('+')
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"phone_number": "+12025550123"},
+                {"phone_number": "12025550123"},
+                {"phone_number": 12025550123}
+            ],
+            "description": "Phone number in E.164 format. Can be provided as string or number."
+        }
+    }
 
 class Contact(BaseModel):
     """Telegram contact information"""
@@ -163,3 +178,55 @@ class ContactsSearchResponse(BaseModel):
 class ChatsSearchResponse(BaseModel):
     """Response model for chats search"""
     chats: List[Chat]
+
+class CodeVerification(BaseModel):
+    phone_number: Annotated[Union[str, int], Field(description="Phone number in E.164 format")]
+    code: Annotated[Union[str, int], Field(description="5-digit verification code")]
+    phone_code_hash: str = Field(..., min_length=16, pattern=r'^[a-f0-9]+$', description="Phone code hash from Telegram")
+
+    @field_validator('phone_number')
+    @classmethod
+    def validate_phone(cls, v: Union[str, int]) -> str:
+        return PhoneNumber(phone_number=v).phone_number
+
+    @field_validator('code')
+    @classmethod
+    def validate_code(cls, v: Union[str, int]) -> str:
+        # Convert to string and strip whitespace
+        code_str = str(v).strip()
+
+        # Validate that the code contains only digits
+        if not code_str.isdigit():
+            raise ValueError("Verification code must contain only digits")
+
+        # Validate code length (typically 5 digits for Telegram)
+        if len(code_str) != 5:
+            raise ValueError("Verification code must be 5 digits long")
+
+        return code_str
+
+    @field_validator('phone_code_hash')
+    @classmethod
+    def validate_hash(cls, v: str) -> str:
+        """Validate phone code hash format"""
+        v = str(v).strip()
+        if not v or not re.match(r'^[a-f0-9]+$', v) or len(v) < 16:
+            raise ValueError('Invalid phone code hash format')
+        return v
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "phone_number": "+12025550123",
+                    "code": "12345",
+                    "phone_code_hash": "8c78b8ee61f7a165b2"
+                },
+                {
+                    "phone_number": 12025550123,
+                    "code": 12345,
+                    "phone_code_hash": "8c78b8ee61f7a165b2"
+                }
+            ]
+        }
+    }

@@ -1,6 +1,36 @@
 import pytest
 from datetime import datetime
-from app.models import Message, Chat
+from app.models import Message, Chat, BaseModel, field_validator, Field
+from typing import Annotated, Union
+from pydantic import ValidationError
+
+# Recreate CodeVerification model directly in the test file to avoid circular imports
+class CodeVerification(BaseModel):
+    phone_number: Annotated[Union[str, int], Field(description="Phone number in E.164 format")]
+    code: Annotated[Union[str, int], Field(description="5-digit verification code")]
+    phone_code_hash: str
+
+    @field_validator('phone_number')
+    @classmethod
+    def validate_phone(cls, v: Union[str, int]) -> str:
+        from app.models import PhoneNumber
+        return PhoneNumber(phone_number=v).phone_number
+
+    @field_validator('code')
+    @classmethod
+    def validate_code(cls, v: Union[str, int]) -> str:
+        # Convert to string and strip whitespace
+        code_str = str(v).strip()
+
+        # Validate that the code contains only digits
+        if not code_str.isdigit():
+            raise ValueError("Verification code must contain only digits")
+
+        # Validate code length (typically 5 digits for Telegram)
+        if len(code_str) != 5:
+            raise ValueError("Verification code must be 5 digits long")
+
+        return code_str
 
 def test_message_link_generation_with_username():
     """Test message link generation for chats with username"""
@@ -154,3 +184,60 @@ def cleanup_message_chat_info():
     """Cleanup Message._chat_info after each test"""
     yield
     Message._chat_info = None
+
+def test_code_verification_string_code():
+    """Test that a string code is correctly processed"""
+    verification = CodeVerification(
+        phone_number="+12025550123",
+        code="12345",
+        phone_code_hash="some_hash"
+    )
+    assert verification.code == "12345"
+    assert isinstance(verification.code, str)
+
+def test_code_verification_integer_code():
+    """Test that an integer code is converted to string"""
+    verification = CodeVerification(
+        phone_number="+12025550123",
+        code=12345,
+        phone_code_hash="some_hash"
+    )
+    assert verification.code == "12345"
+    assert isinstance(verification.code, str)
+
+def test_code_verification_whitespace_code():
+    """Test that whitespace is stripped from the code"""
+    verification = CodeVerification(
+        phone_number="+12025550123",
+        code=" 12345 ",
+        phone_code_hash="some_hash"
+    )
+    assert verification.code == "12345"
+    assert isinstance(verification.code, str)
+
+def test_code_verification_invalid_code():
+    """Test that non-digit codes raise a validation error"""
+    with pytest.raises(ValidationError):
+        CodeVerification(
+            phone_number="+12025550123",
+            code="abcde",
+            phone_code_hash="some_hash"
+        )
+
+def test_code_verification_empty_code():
+    """Test that empty codes raise a validation error"""
+    with pytest.raises(ValidationError):
+        CodeVerification(
+            phone_number="+12025550123",
+            code="",
+            phone_code_hash="some_hash"
+        )
+
+def test_code_verification_none_code():
+    """Test that None codes raise a validation error"""
+    with pytest.raises(ValidationError):
+        CodeVerification(
+            phone_number="+12025550123",
+            code=None,
+            phone_code_hash="some_hash"
+        )

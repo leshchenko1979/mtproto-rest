@@ -1,7 +1,10 @@
 import os
 import sys
-from pathlib import Path
 
-# Add the project root directory to Python path
-project_root = str(Path(__file__).parent.parent)
+# Add the project root to the Python path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
+
+# Disable logging during tests to reduce noise
+import logging
+logging.disable(logging.CRITICAL)
