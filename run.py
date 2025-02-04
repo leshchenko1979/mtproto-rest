@@ -1,26 +1,62 @@
+# Set ENVIRONMENT to development when run locally
+import os
+
+os.environ["ENVIRONMENT"] = "development"
+
 import uvicorn
 import logging
-from app.main import app, settings
+import logging.config
+from app.main import settings
 
-# Configure logging
-logging.basicConfig(level=logging.WARNING)  # Set high level for all loggers by default
 
-# Get the app logger and prevent propagation to root logger
-app_logger = logging.getLogger("app")
-app_logger.setLevel(logging.DEBUG)
-app_logger.propagate = False  # Prevent propagation to root logger
+class DetailedFormatter(logging.Formatter):
+    def format(self, record):
+        # Format the message with timestamp, level, etc.
+        formatted = super().format(record)
 
-# Create console handler with formatter
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s\n%(exc_info)s',  # Add exc_info to show tracebacks
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
-console_handler.setFormatter(formatter)
+        # Only append exception info if it exists
+        if record.exc_info:
+            # Get exception formatted text
+            exc_text = self.formatException(record.exc_info)
+            # Append it to the message
+            formatted = f"{formatted}\n{exc_text}"
 
-# Add handler to app logger
-app_logger.addHandler(console_handler)
+        return formatted
+
+
+# Development logging configuration
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": True,
+    "formatters": {
+        "detailed": {
+            "()": DetailedFormatter,
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "detailed",
+            "stream": "ext://sys.stdout",
+            "level": "DEBUG",
+        }
+    },
+    "loggers": {
+        "app": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "pyrogram": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "uvicorn": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "": {  # Root logger
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
+
+# Apply development logging configuration
+logging.config.dictConfig(LOGGING_CONFIG)
 
 if __name__ == "__main__":
     try:
@@ -28,18 +64,20 @@ if __name__ == "__main__":
             "app.main:app",
             host=settings.HOST,
             port=settings.PORT,
-            workers=settings.WORKERS_COUNT,
+            workers=1,  # Force single worker
             timeout_keep_alive=75,
             timeout_graceful_shutdown=30,
             limit_concurrency=1000,
             backlog=2048,
-            reload=True,
+            reload=True,  # Enable auto-reload for development
             log_level="warning",  # Reduce Uvicorn logging noise
             access_log=False,  # Disable access logs since we use Logfire
             proxy_headers=True,
             forwarded_allow_ips="*",
-            server_header=False
+            server_header=False,
         )
     except Exception as e:
-        app_logger.exception("Application failed to start")  # This will automatically include traceback
+        logging.getLogger("app").exception(
+            "Application failed to start"
+        )  # This will automatically include traceback
         raise  # Re-raise the exception to ensure the process exits with error

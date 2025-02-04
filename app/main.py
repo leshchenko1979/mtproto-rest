@@ -18,13 +18,12 @@ class Settings(BaseSettings):
 
     # Logfire settings
     LOGFIRE_TOKEN: str | None = None
-    ENVIRONMENT: str = "production"
+    ENVIRONMENT: str | None = None
 
     # Server settings
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    WORKERS_COUNT: int = 1
-    RELOAD: bool = False
+    RELOAD: bool = False  # Disable reload by default for production
 
     class Config:
         env_file = ".env"
@@ -47,6 +46,7 @@ LOGGING_CONFIG = {
             "class": "logging.StreamHandler",
             "formatter": "default",
             "stream": "ext://sys.stdout",
+            "level": "INFO"
         },
     },
     "loggers": {
@@ -55,43 +55,44 @@ LOGGING_CONFIG = {
             "level": "INFO",
             "propagate": False,
         },
-        "": {
+        "pyrogram": {
             "handlers": ["console"],
             "level": "WARNING",
+            "propagate": False,
         },
-    },
+        "uvicorn": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "": {  # Root logger
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        }
+    }
 }
 
-logger = logging.getLogger("app")
+def setup_logging():
+    """Configure logging settings"""
+    # Clear all existing handlers
+    logging.getLogger().handlers.clear()
 
-def setup_logging() -> None:
-    """Configure logging"""
-    try:
-        logging.config.dictConfig(LOGGING_CONFIG)
-    except Exception as e:
-        logging.basicConfig(level="INFO")
-        logger.exception("Failed to configure logging")
+    # Apply configuration
+    logging.config.dictConfig(LOGGING_CONFIG)
 
-def setup_logfire() -> bool:
-    """Configure Logfire integration"""
-    if not settings.LOGFIRE_TOKEN:
-        logger.warning("LOGFIRE_TOKEN not set")
-        return False
-
-    try:
+    if settings.LOGFIRE_TOKEN:
+        logger.info("Logfire token set, configuring Logfire")
         logfire.configure(
             token=settings.LOGFIRE_TOKEN,
             environment=settings.ENVIRONMENT
         )
-        logfire.info("Logfire configuration test", service=APP_NAME)
-        logger.info("Logfire configured successfully")
-        return True
-    except Exception as e:
-        logger.exception("Logfire configuration failed")
-        return False
+    else:
+        logger.info("Logfire token not set, skipping configuration")
 
-def configure_middleware(app: FastAPI) -> None:
-    """Configure middleware"""
+
+def configure_middleware(app: FastAPI):
+    """Configure CORS and other middleware"""
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -100,11 +101,12 @@ def configure_middleware(app: FastAPI) -> None:
         allow_headers=["*"],
     )
 
-def configure_routes(app: FastAPI) -> None:
-    """Configure routes"""
-    from app.routes import auth, search
+def configure_routes(app: FastAPI):
+    """Configure API routes"""
+    from app.routes import auth, search, forward
     app.include_router(auth.router)
     app.include_router(search.router)
+    app.include_router(forward.router)
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
@@ -116,17 +118,15 @@ def create_app() -> FastAPI:
         version=APP_VERSION
     )
 
-    if setup_logfire():
-        try:
-            logfire.instrument_fastapi(app)
-            logger.info("FastAPI instrumented with Logfire")
-        except Exception as e:
-            logger.exception("FastAPI Logfire instrumentation failed")
+    logfire.instrument_fastapi(app)
 
     configure_middleware(app)
     configure_routes(app)
 
     return app
+
+# Get logger after logging configuration
+logger = logging.getLogger(__name__)
 
 app = create_app()
 
@@ -141,11 +141,5 @@ async def health_check() -> Dict[str, Any]:
     }
 
     logger.info("Health check performed", extra=status_info)
-
-    if settings.LOGFIRE_TOKEN:
-        try:
-            logfire.info("Health check performed", **status_info)
-        except Exception as e:
-            logger.exception("Failed to log to Logfire")
 
     return status_info
