@@ -1,9 +1,10 @@
 # Telegram REST API Server
 
-A REST API server built with FastAPI that provides access to Telegram MTProto functionality, specifically focused on searching contacts and chats through multiple Telegram accounts.
+A REST API server built with FastAPI that provides access to Telegram MTProto functionality, including message forwarding, contact search, and chat management through multiple Telegram accounts.
 
 ## Features
 
+- Forward messages between chats with customizable options
 - Search through Telegram contacts and chats
 - Support for multiple Telegram accounts
 - MTProto-based secure communication with Telegram servers
@@ -160,24 +161,55 @@ GET /health
 POST /api/accounts/start
 - Add a new Telegram account (requires phone number and verification)
 
+POST /api/accounts/verify-code
+- Verify the authentication code sent to the phone
+
+POST /api/accounts/verify-password
+- Complete 2FA authentication if required
+
 GET /api/accounts/list
 - List all registered accounts
 
-DELETE /api/accounts/{account_id}
+DELETE /api/accounts/{phone_number}
 - Remove an account
+```
+
+### Message Operations
+```
+POST /api/forward/messages
+Request Body:
+{
+    "source_phone": "phone_number",
+    "source_chat": "@channel_name",
+    "destination_chat": "@channel_name",
+    "message_ids": [123, 456],  // Optional: Specific message IDs to forward
+    "message_links": [          // Optional: Message links to forward
+        "https://t.me/channel_name/123"
+    ],
+    "remove_sender_info": false,  // Optional: Remove original sender info
+    "remove_captions": false,     // Optional: Remove media captions
+    "prevent_further_forwards": false,  // Optional: Prevent further forwarding
+    "silent": false              // Optional: Send without notifications
+}
+
+Response:
+{
+    "status": "success",
+    "forwarded_message_ids": [789, 790]  // IDs of forwarded messages
+}
 ```
 
 ### Search Operations
 ```
 GET /api/search/contacts
 Query Parameters:
-- session_id: ID of the Telegram account to use
+- phone_number: Phone number of the Telegram account to use
 - query: Search query string
 - limit: Maximum number of results to return (default: 50)
 
 GET /api/search/chats
 Query Parameters:
-- session_id: ID of the Telegram account to use
+- phone_number: Phone number of the Telegram account to use
 - query: Search query string
 - limit: Maximum number of results to return (default: 50)
 ```
@@ -186,6 +218,7 @@ Query Parameters:
 
 The application uses Logfire's FastAPI integration for comprehensive logging:
 - API endpoint access and performance metrics
+- Message forwarding operations
 - Search operations and results
 - Account management events
 - Error tracking and debugging information
@@ -195,6 +228,7 @@ Configure your Logfire dashboard to monitor:
 - Error rates and types
 - Performance metrics
 - Account activity
+- Message forwarding statistics
 
 ## Security Considerations
 
@@ -202,6 +236,7 @@ Configure your Logfire dashboard to monitor:
 - Implement proper authentication for API endpoints
 - Follow Telegram's terms of service and API usage guidelines
 - Regularly rotate API keys and credentials
+- Ensure proper message forwarding permissions
 - Docker security best practices:
   - Use non-root user in container
   - Keep base images updated
