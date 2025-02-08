@@ -55,22 +55,21 @@ LOGGING_CONFIG = {
         "app": {
             "handlers": ["console", "file"],
             "level": "DEBUG",
-            "propagate": True
+            "propagate": False  # Prevent propagation to root logger
         },
         "uvicorn": {
-            "handlers": ["console", "file"],
+            "handlers": ["console"],  # Only console for uvicorn
             "level": "INFO",
-            "propagate": True
+            "propagate": False
         },
         "telethon": {
             "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": True
+            "level": "INFO",  # Reduce telethon logging noise
+            "propagate": False
         },
-        "": {  # Root logger
+        "": {  # Root logger - catch all other loggers
             "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": True
+            "level": "INFO"  # Less verbose for unknown loggers
         },
     },
 }

@@ -87,7 +87,7 @@ def create_app() -> FastAPI:
             status_code=exc.status_code,
             content={
                 "detail": exc.detail,
-                "docs_url": "https://github.com/leshchenko1979/rest_tg"
+                "docs_url": "https://github.com/leshchenko1979/mtproto-rest"
             }
         )
 
@@ -97,7 +97,7 @@ def create_app() -> FastAPI:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content={
                 "detail": str(exc),
-                "docs_url": "https://github.com/leshchenko1979/rest_tg"
+                "docs_url": "https://github.com/leshchenko1979/mtproto-rest"
             }
         )
 
@@ -108,7 +108,7 @@ def create_app() -> FastAPI:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "detail": "Internal server error. Please check the documentation for proper API usage.",
-                "docs_url": "https://github.com/leshchenko1979/rest_tg"
+                "docs_url": "https://github.com/leshchenko1979/mtproto-rest"
             }
         )
 
