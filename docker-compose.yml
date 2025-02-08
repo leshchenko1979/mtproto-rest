@@ -36,7 +36,7 @@ services:
       - ENVIRONMENT=production
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mtproto-rest.rule=Host(`rest-tg.redevest.ru`)"
+      - "traefik.http.routers.mtproto-rest.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.mtproto-rest.entrypoints=websecure"
       - "traefik.http.routers.mtproto-rest.tls=true"
       - "traefik.http.routers.mtproto-rest.tls.certresolver=cloudflare"
