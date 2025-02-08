@@ -1,31 +1,61 @@
-# Telegram REST API Server
+# MTProto-REST: Telegram User Account API
 
-A REST API server built with FastAPI that provides access to Telegram MTProto functionality, including message forwarding, contact search, and chat management through multiple Telegram accounts.
+A secure REST API server that provides HTTPS access to Telegram user accounts via MTProto protocol. Unlike the official Telegram Bot API, this service enables programmatic control of regular user accounts through a RESTful interface, allowing message forwarding, contact search, and chat management through multiple Telegram accounts.
+
+🔐 **Key Differentiator**: While Telegram only offers REST API for bots, MTProto-REST uniquely provides REST access to regular user accounts via MTProto protocol.
+
+🚀 **Demo Server**: Try it out at https://mtproto-rest.redevest.ru/
+
+## Table of Contents
+- [Features](#features)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Environment Setup](#environment-setup)
+- [Development](#development)
+  - [Local Setup](#local-setup)
+  - [Docker Development](#docker-development)
+- [Deployment](#deployment)
+  - [Production Deployment](#production-deployment)
+  - [VS Code Integration](#vs-code-integration)
+- [Architecture](#architecture)
+  - [Docker Configuration](#docker-configuration)
+  - [Resource Management](#resource-management)
+  - [Health Monitoring](#health-monitoring)
+- [API Reference](#api-reference)
+  - [Health Check](#health-check)
+  - [Account Management](#account-management)
+  - [Message Operations](#message-operations)
+  - [Search Operations](#search-operations)
+- [Monitoring](#monitoring)
+  - [Logging](#logging)
+  - [Metrics](#metrics)
+- [Security](#security)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Features
-
-- Forward messages between chats with customizable options
-- Search through Telegram contacts and chats
-- Support for multiple Telegram accounts
 - MTProto-based secure communication with Telegram servers
-- RESTful API endpoints with FastAPI
-- Comprehensive logging with Logfire integration
+- Multiple Telegram account support
+- Message forwarding with customizable options
+- Contact and chat search functionality
+- RESTful API with FastAPI
+- Comprehensive logging (Logfire integration)
 - Auto-generated OpenAPI documentation
-- Containerized deployment with Docker and Traefik integration
-- Health monitoring endpoints
+- Docker and Traefik integration
+- Health monitoring
 - Resource management and limits
 
-## Prerequisites
+## Getting Started
 
+### Prerequisites
 - Docker and Docker Compose
 - Telegram API credentials (api_id and api_hash)
 - Active Telegram account(s)
 - Logfire account and API token
-- Traefik reverse proxy setup (for production deployment)
+- Traefik reverse proxy (for production)
 
-## Environment Setup
-
-Create a `.env` file in the project root with the following variables:
+### Environment Setup
+Create a `.env` file in the project root:
 
 ```env
 # Telegram API Credentials
@@ -47,22 +77,22 @@ DEPLOY_PATH=/path/to/deployment/directory
 
 ## Development
 
-### Local Development
+### Local Setup
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/rest_tg.git
-   cd rest_tg
-   ```
+```bash
+git clone https://github.com/yourusername/mtproto-rest.git
+cd mtproto-rest
+```
 
 2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+pip install -r requirements.txt
+```
 
 3. Run the server:
-   ```bash
-   python run.py
-   ```
+```bash
+python run.py
+```
 
 ### Docker Development
 ```bash
@@ -78,176 +108,143 @@ docker compose down
 
 ## Deployment
 
-### Direct Deployment
-The project includes a deployment script that packages and deploys the application directly to your server:
+### Production Deployment
+The project includes a deployment script:
 
-1. Ensure your `.env` file is properly configured with deployment variables
-2. Run the deployment script:
-   ```bash
-   ./scripts/deploy.sh
-   ```
+1. Configure `.env` with deployment variables
+2. Run deployment:
+```bash
+./scripts/deploy.sh
+```
 
 The script will:
-- Package the application (including .env file)
-- Copy it to your server
-- Deploy using Docker Compose
+- Package the application
+- Copy to server
+- Deploy via Docker Compose
 
-### VS Code Tasks
-The project includes several VS Code tasks organized by category:
+### VS Code Integration
+Available tasks organized by category:
 
-#### Development Tasks
-- `Local Development`: Default task that runs the FastAPI server
-- `Run FastAPI Server`: Runs the server directly with Python
+**Development Tasks**
+- `Local Development`: Run FastAPI server
+- `Run FastAPI Server`: Direct Python execution
 
-#### Docker Tasks
-- `Docker: Start`: Builds and starts the Docker containers
-- `Docker: Stop`: Stops and removes the Docker containers
+**Docker Tasks**
+- `Docker: Start`: Build and start containers
+- `Docker: Stop`: Stop and remove containers
 
-#### Deployment Tasks
-- `Deploy to Production`: Deploys the application using the deployment script
-  - Note: The script will be automatically made executable when running this task
+**Deployment Tasks**
+- `Deploy to Production`: Run deployment script
 
-#### SSH Tasks
-- `SSH: Connect to Production`: Opens an SSH connection to the production server
-- `SSH: View Logs`: Shows Docker Compose logs from the production server
-- `SSH: Check Status`: Displays the status of Docker containers on the production server
+**SSH Tasks**
+- `SSH: Connect to Production`: Open SSH connection
+- `SSH: View Logs`: Show Docker logs
+- `SSH: Check Status`: Display container status
 
-To use these tasks in VS Code:
+To run tasks in VS Code:
 1. Press `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (macOS)
 2. Type "Tasks: Run Task"
-3. Select the desired task from the list
+3. Select desired task
 
-## Docker Configuration
+## Architecture
 
-### Resource Limits and Optimization
-- Minimal resource usage:
-  - CPU: Maximum 0.5 cores, minimum 0.1 cores
-  - Memory: Maximum 256MB, minimum 128MB
-- Python optimization level 2 enabled
-- Worker configuration:
-  - 2 Uvicorn workers
-  - 100 concurrent connections limit
-  - Optimized keep-alive settings
-- Log rotation:
-  - Maximum 10MB per file
-  - 3 files rotation policy
+### Docker Configuration
+- Base image optimization
+- Python optimization level 2
+- 2 Uvicorn workers
+- 100 concurrent connections limit
+- Optimized keep-alive settings
 
-### Volumes
-The application uses Docker volumes to persist:
-- `telegram_sessions`: Stores Telegram session files
-- `logs`: Stores application logs
+### Resource Management
+**Limits:**
+- CPU: 0.1-0.5 cores
+- Memory: 128-256MB
+- Log rotation: 10MB max, 3 files
 
-### Health Checks
+**Volumes:**
+- `telegram_sessions`: Session storage
+- `logs`: Application logs
+
+### Health Monitoring
 - Endpoint: `/health`
-- Interval: 30 seconds
-- Timeout: 10 seconds
-- Retries: 3
+- 30-second interval
+- 10-second timeout
+- 3 retries
 
-### Traefik Integration
-- Automatic SSL termination
-- Load balancing
-- Reverse proxy configuration
-
-## API Endpoints
+## API Reference
 
 ### Health Check
 ```
 GET /health
-- Check the application health status
+Response: Application health status
 ```
 
 ### Account Management
 ```
 POST /api/accounts/start
-- Add a new Telegram account (requires phone number and verification)
-
 POST /api/accounts/verify-code
-- Verify the authentication code sent to the phone
-
 POST /api/accounts/verify-password
-- Complete 2FA authentication if required
-
 GET /api/accounts/list
-- List all registered accounts
-
 DELETE /api/accounts/{phone_number}
-- Remove an account
 ```
 
 ### Message Operations
 ```
 POST /api/forward/messages
-Request Body:
 {
     "source_phone": "phone_number",
     "source_chat": "@channel_name",
     "destination_chat": "@channel_name",
-    "message_ids": [123, 456],  // Optional: Specific message IDs to forward
-    "message_links": [          // Optional: Message links to forward
-        "https://t.me/channel_name/123"
-    ],
-    "remove_sender_info": false,  // Optional: Remove original sender info
-    "remove_captions": false,     // Optional: Remove media captions
-    "prevent_further_forwards": false,  // Optional: Prevent further forwarding
-    "silent": false              // Optional: Send without notifications
-}
-
-Response:
-{
-    "status": "success",
-    "forwarded_message_ids": [789, 790]  // IDs of forwarded messages
+    "message_ids": [123, 456],
+    "message_links": ["https://t.me/channel_name/123"],
+    "remove_sender_info": false,
+    "remove_captions": false,
+    "prevent_further_forwards": false,
+    "silent": false
 }
 ```
 
 ### Search Operations
 ```
 GET /api/search/contacts
-Query Parameters:
-- phone_number: Phone number of the Telegram account to use
-- query: Search query string
-- limit: Maximum number of results to return (default: 50)
-
 GET /api/search/chats
 Query Parameters:
-- phone_number: Phone number of the Telegram account to use
-- query: Search query string
-- limit: Maximum number of results to return (default: 50)
+- phone_number
+- query
+- limit (default: 50)
 ```
 
-## Logging
+## Monitoring
 
-The application uses Logfire's FastAPI integration for comprehensive logging:
-- API endpoint access and performance metrics
-- Message forwarding operations
-- Search operations and results
-- Account management events
-- Error tracking and debugging information
+### Logging
+Logfire integration provides:
+- API endpoint metrics
+- Operation tracking
+- Error monitoring
+- Performance analytics
 
-Configure your Logfire dashboard to monitor:
+### Metrics
+Monitor via Logfire dashboard:
 - API usage patterns
-- Error rates and types
+- Error rates
 - Performance metrics
 - Account activity
-- Message forwarding statistics
+- Message statistics
 
-## Security Considerations
-
-- Store API credentials securely using environment variables
-- Implement proper authentication for API endpoints
-- Follow Telegram's terms of service and API usage guidelines
-- Regularly rotate API keys and credentials
-- Ensure proper message forwarding permissions
-- Docker security best practices:
-  - Use non-root user in container
-  - Keep base images updated
-  - Scan for vulnerabilities
-  - Resource limits enforcement
-  - Secure volume management
-
-## License
-
-MIT License
+## Security
+- Secure credential storage
+- API endpoint authentication
+- Telegram ToS compliance
+- Regular key rotation
+- Docker security:
+  - Non-root user
+  - Updated base images
+  - Vulnerability scanning
+  - Resource limits
+  - Secure volumes
 
 ## Contributing
+Contributions welcome! Please submit Pull Requests.
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+## License
+MIT License
