@@ -6,19 +6,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONOPTIMIZE=2
+    PYTHONOPTIMIZE=2 \
+    RUSTFLAGS="-C target-feature=-crt-static" \
+    CARGO_NET_GIT_FETCH_WITH_CLI=true \
+    CARGO_BUILD_JOBS=4
 
-# Install build dependencies
+# Install minimal build dependencies
 RUN apk add --no-cache \
-    gcc \
-    musl-dev \
-    python3-dev
+    build-base \
+    rust \
+    cargo
 
 WORKDIR /app
 
-# Install dependencies
+# Copy only requirements first to leverage Docker cache
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Install dependencies with optimized Rust build
+RUN --mount=type=cache,target=/root/.cargo/registry \
+    --mount=type=cache,target=/root/.cargo/git \
+    pip install --no-cache-dir -r requirements.txt
 
 # Production stage
 FROM python:3.13-alpine
@@ -35,8 +42,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     GRACEFUL_TIMEOUT=10 \
     PATH="/usr/local/bin:$PATH"
 
-# Install curl for health checks
-RUN apk add --no-cache curl
+# Install minimal runtime dependencies and curl for health checks
+RUN apk add --no-cache libstdc++ curl
 
 # Create non-root user
 RUN adduser -D appuser
@@ -48,10 +55,9 @@ RUN mkdir -p /app/sessions /app/logs && \
 
 WORKDIR /app
 
-# Copy Python packages and executables from builder
+# Copy only necessary Python packages and executables from builder
 COPY --from=builder /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
-COPY --from=builder /usr/local/bin/ /usr/local/bin/
-
+COPY --from=builder /usr/local/bin/uvicorn /usr/local/bin/
 
 # Copy application code
 COPY --chown=appuser:appuser . .

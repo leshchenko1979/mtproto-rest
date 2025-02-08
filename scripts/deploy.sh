@@ -51,6 +51,7 @@ scp "$TEMP_DIR/deploy.tar.gz" "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
 # Deploy on remote
 echo -e "${YELLOW}[$(timestamp)] Deploying on remote server...${NC}"
 ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+    mkdir -p $DEPLOY_PATH && \
     cd $DEPLOY_PATH && \
     # Remove everything in the deployment directory
     rm -rf * .* 2>/dev/null || true && \
