@@ -1,53 +1,111 @@
 from fastapi import APIRouter, HTTPException, Query, status
-from typing import Optional, Annotated
+from typing import Optional, Annotated, List
+from pydantic import BaseModel, Field
 from app.session_manager import session_manager
 from app.models import Contact, Chat, PhoneNumber, ContactsSearchResponse, ChatsSearchResponse, Message
 from app.main import settings
 import logging
+import logfire
 
 # Get logger
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 
-@router.get("/contacts", response_model=ContactsSearchResponse)
-async def search_contacts(
-    phone_number: str,
-    query: str = Query(..., min_length=1),
-    limit: int = Query(50, ge=1, le=100)
-):
-    """Search contacts"""
+class Contact(BaseModel):
+    """Contact information"""
+    user_id: int
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    phone_number: Optional[str] = None
+
+@router.get("/contacts/{phone_number}")
+async def search_contacts(phone_number: str) -> List[Contact]:
+    """Search contacts for a given account"""
     source_client = None
     try:
         # Validate phone number
         validated_phone = PhoneNumber(phone_number=phone_number).phone_number
+
+        # Get client
         source_client = await session_manager.get_client(validated_phone, settings.API_ID, settings.API_HASH)
 
+        # Get contacts
         contacts = []
-        async for contact in source_client.get_contacts():
-            if (query.lower() in (contact.first_name or '').lower() or
-                query.lower() in (contact.last_name or '').lower() or
-                query.lower() in (contact.phone_number or '').lower()):
-                contacts.append(Contact(
-                    user_id=contact.id,
-                    first_name=contact.first_name,
-                    last_name=contact.last_name,
-                    username=contact.username,
-                    phone_number=contact.phone_number
-                ))
-                if len(contacts) >= limit:
-                    break
-        return ContactsSearchResponse(contacts=contacts)
+        async for contact in source_client.iter_contacts():
+            contacts.append(Contact(
+                user_id=contact.id,
+                first_name=contact.first_name,
+                last_name=contact.last_name,
+                username=contact.username,
+                phone_number=contact.phone
+            ))
+
+        return contacts
 
     except Exception as e:
-        logger.error(f"Error searching contacts: {str(e)}")
+        logger.error(f"Error searching contacts: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to search contacts: {str(e)}"
         )
     finally:
         if source_client:
-            await session_manager._cleanup_client(validated_phone)
+            await session_manager._cleanup_client(phone_number)
+
+class Message(BaseModel):
+    """Message information"""
+    message_id: int
+    chat_id: int
+    text: Optional[str] = None
+    date: Optional[str] = None
+    from_user: Optional[int] = None
+
+@router.get("/messages/{phone_number}")
+@logfire.instrument()
+async def search_messages(
+    phone_number: str,
+    query: str,
+    limit: int = 100
+) -> List[Message]:
+    """Search messages globally for a given account"""
+    source_client = None
+    try:
+        # Validate phone number
+        validated_phone = PhoneNumber(phone_number=phone_number).phone_number
+
+        # Get client
+        source_client = await session_manager.get_client(validated_phone, settings.API_ID, settings.API_HASH)
+
+        # Search messages
+        messages = []
+        async for dialog in source_client.iter_dialogs():
+            async for message in source_client.iter_messages(dialog, search=query, limit=limit):
+                if message and message.text:  # Only include text messages
+                    messages.append(Message(
+                        message_id=message.id,
+                        chat_id=dialog.id,
+                        text=message.text,
+                        date=str(message.date) if message.date else None,
+                        from_user=message.from_id.user_id if message.from_id else None
+                    ))
+                    if len(messages) >= limit:
+                        break
+            if len(messages) >= limit:
+                break
+
+        return messages[:limit]
+
+    except Exception as e:
+        logger.error(f"Error searching messages: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search messages: {str(e)}"
+        )
+    finally:
+        if source_client:
+            await session_manager._cleanup_client(phone_number)
 
 @router.get("/chats", response_model=ChatsSearchResponse)
 async def search_chats(

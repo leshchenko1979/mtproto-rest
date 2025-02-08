@@ -1,5 +1,5 @@
 # Build stage
-FROM python:3.12-alpine as builder
+FROM python:3.13-alpine as builder
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -21,7 +21,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Production stage
-FROM python:3.12-alpine
+FROM python:3.13-alpine
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -49,8 +49,9 @@ RUN mkdir -p /app/sessions /app/logs && \
 WORKDIR /app
 
 # Copy Python packages and executables from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
+
 
 # Copy application code
 COPY --chown=appuser:appuser . .

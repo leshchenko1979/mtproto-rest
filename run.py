@@ -1,12 +1,13 @@
-# Set ENVIRONMENT to development when run locally
+# Development server runner
 import os
 
+# Force development environment for local runs
 os.environ["ENVIRONMENT"] = "development"
 
 import uvicorn
 import logging
 import logging.config
-from app.main import settings
+from app.main import settings, APP_NAME
 
 
 class DetailedFormatter(logging.Formatter):
@@ -24,10 +25,10 @@ class DetailedFormatter(logging.Formatter):
         return formatted
 
 
-# Development logging configuration
+# Development logging configuration - more verbose for debugging
 LOGGING_CONFIG = {
     "version": 1,
-    "disable_existing_loggers": True,
+    "disable_existing_loggers": False,
     "formatters": {
         "detailed": {
             "()": DetailedFormatter,
@@ -41,22 +42,48 @@ LOGGING_CONFIG = {
             "formatter": "detailed",
             "stream": "ext://sys.stdout",
             "level": "DEBUG",
+        },
+        "file": {
+            "class": "logging.FileHandler",
+            "formatter": "detailed",
+            "filename": "logs/development.log",
+            "mode": "a",
+            "level": "DEBUG",
         }
     },
     "loggers": {
-        "app": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
-        "pyrogram": {"handlers": ["console"], "level": "WARNING", "propagate": False},
-        "uvicorn": {"handlers": ["console"], "level": "WARNING", "propagate": False},
+        "app": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": True
+        },
+        "uvicorn": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": True
+        },
+        "telethon": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": True
+        },
         "": {  # Root logger
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": True
         },
     },
 }
 
+# Ensure logs directory exists
+os.makedirs("logs", exist_ok=True)
+
 # Apply development logging configuration
 logging.config.dictConfig(LOGGING_CONFIG)
+
+# Get the logger for this module
+logger = logging.getLogger("app")
+logger.info(f"Starting {APP_NAME} in development mode")
 
 if __name__ == "__main__":
     try:
@@ -64,7 +91,7 @@ if __name__ == "__main__":
             "app.main:app",
             host=settings.HOST,
             port=settings.PORT,
-            workers=1,  # Force single worker
+            workers=1,  # Force single worker for development
             timeout_keep_alive=75,
             timeout_graceful_shutdown=30,
             limit_concurrency=1000,
@@ -77,7 +104,5 @@ if __name__ == "__main__":
             server_header=False,
         )
     except Exception as e:
-        logging.getLogger("app").exception(
-            "Application failed to start"
-        )  # This will automatically include traceback
+        logger.exception("Application failed to start")
         raise  # Re-raise the exception to ensure the process exits with error

@@ -35,11 +35,11 @@ services:
       - ENVIRONMENT=production
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rest-tg.rule=Host(`rest-tg.redevest.ru`)"
-      - "traefik.http.routers.rest-tg.entrypoints=websecure"
-      - "traefik.http.routers.rest-tg.tls=true"
-      - "traefik.http.routers.rest-tg.tls.certresolver=cloudflare"
-      - "traefik.http.services.rest-tg.loadbalancer.server.port=8000"
+      - "traefik.http.routers.mtproto-rest.rule=Host(`rest-tg.redevest.ru`)"
+      - "traefik.http.routers.mtproto-rest.entrypoints=websecure"
+      - "traefik.http.routers.mtproto-rest.tls=true"
+      - "traefik.http.routers.mtproto-rest.tls.certresolver=cloudflare"
+      - "traefik.http.services.mtproto-rest.loadbalancer.server.port=8000"
     networks:
       - traefik-public
     deploy:
@@ -63,6 +63,6 @@ networks:
 
 volumes:
   telegram_sessions:
-    name: rest_tg_sessions
+    name: mtproto_rest_sessions
   logs:
-    name: rest_tg_logs
+    name: mtproto_rest_logs

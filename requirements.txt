@@ -1,8 +1,8 @@
 fastapi
 uvicorn
-pyrogram
-tgcrypto
+telethon
 pydantic
 pydantic-settings
-httpx
 logfire[fastapi]
+cryptg
+cryptography>=42.0.0

@@ -153,7 +153,7 @@ class Chat(BaseModel):
 class SessionInfo(BaseModel):
     """Telegram session information"""
     phone_number: str = Field(..., description="Phone number in E.164 format")
-    session_string: str = Field(..., description="Pyrogram session string")
+    session_string: str = Field(..., description="Telethon session string")
     user_id: int = Field(..., description="Telegram user ID")
     username: Optional[str] = Field(None, description="Telegram username")
 

@@ -1,17 +1,17 @@
-from fastapi import FastAPI, status
+from fastapi import FastAPI, status, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-import logging.config
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+import logging
 import logfire
+import os
 from typing import Dict, Any
 from pydantic_settings import BaseSettings
-
-# Constants
-APP_NAME = "telegram-rest-api"
-APP_VERSION = "1.0.0"
-APP_DESCRIPTION = "REST API for Telegram MTProto functionality"
+from .constants import APP_NAME, APP_VERSION, APP_DESCRIPTION
 
 class Settings(BaseSettings):
     """Application settings"""
+
     # Telegram credentials
     API_ID: int
     API_HASH: str
@@ -29,70 +29,90 @@ class Settings(BaseSettings):
         env_file = ".env"
         extra = "allow"
 
+
+# Create settings instance
 settings = Settings()
 
-# Logging configuration
-LOGGING_CONFIG = {
-    "version": 1,
-    "disable_existing_loggers": True,
-    "formatters": {
-        "default": {
-            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "default",
-            "stream": "ext://sys.stdout",
-            "level": "INFO"
-        },
-    },
-    "loggers": {
-        "app": {
-            "handlers": ["console"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "pyrogram": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "uvicorn": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "": {  # Root logger
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        }
-    }
-}
+# Configure base logging - minimal for production to reduce noise
+os.makedirs('logs', exist_ok=True)
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "DEBUG"),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/debug.log'),
+        logging.StreamHandler()
+    ]
+)
 
-def setup_logging():
-    """Configure logging settings"""
-    # Clear all existing handlers
-    logging.getLogger().handlers.clear()
+logger = logging.getLogger(__name__)
 
-    # Apply configuration
-    logging.config.dictConfig(LOGGING_CONFIG)
-
-    if settings.LOGFIRE_TOKEN:
-        logger.info("Logfire token set, configuring Logfire")
+# Set up logfire for production logging
+if settings.LOGFIRE_TOKEN:
+    try:
+        # Configure Logfire with production settings
         logfire.configure(
             token=settings.LOGFIRE_TOKEN,
-            environment=settings.ENVIRONMENT
+            environment=settings.ENVIRONMENT or "production",
+            service_name=APP_NAME,
+            service_version=APP_VERSION
         )
-    else:
-        logger.info("Logfire token not set, skipping configuration")
+        logger.info("Logfire configured successfully", extra={
+            "logfire_enabled": True,
+            "environment": settings.ENVIRONMENT,
+            "log_level": os.getenv("LOG_LEVEL", "INFO")
+        })
+    except Exception as e:
+        logger.error(f"Failed to configure Logfire: {e}", exc_info=True)
+else:
+    logger.warning("Logfire token not provided, running without Logfire integration")
+
+# Log application startup
+logger.info(f"Starting {APP_NAME} in {settings.ENVIRONMENT or 'production'} mode")
 
 
-def configure_middleware(app: FastAPI):
-    """Configure CORS and other middleware"""
+def create_app() -> FastAPI:
+    """Create and configure FastAPI application"""
+    app = FastAPI(
+        title=APP_NAME,
+        description=APP_DESCRIPTION,
+        version=APP_VERSION,
+        docs_url="/docs",
+        redoc_url="/redoc"
+    )
+
+    # Add exception handlers
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "detail": exc.detail,
+                "docs_url": "https://github.com/leshchenko1979/rest_tg"
+            }
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "detail": str(exc),
+                "docs_url": "https://github.com/leshchenko1979/rest_tg"
+            }
+        )
+
+    @app.exception_handler(Exception)
+    async def catch_all_exception_handler(request: Request, exc: Exception):
+        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "Internal server error. Please check the documentation for proper API usage.",
+                "docs_url": "https://github.com/leshchenko1979/rest_tg"
+            }
+        )
+
+    # Set up CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -101,45 +121,28 @@ def configure_middleware(app: FastAPI):
         allow_headers=["*"],
     )
 
-def configure_routes(app: FastAPI):
-    """Configure API routes"""
-    from app.routes import auth, search, forward
+    # Import and include routers
+    from app.routes import auth, forward, search
     app.include_router(auth.router)
-    app.include_router(search.router)
     app.include_router(forward.router)
+    app.include_router(search.router)
 
-def create_app() -> FastAPI:
-    """Create and configure FastAPI application"""
-    setup_logging()
-
-    app = FastAPI(
-        title=APP_NAME,
-        description=APP_DESCRIPTION,
-        version=APP_VERSION
-    )
-
-    logfire.instrument_fastapi(app)
-
-    configure_middleware(app)
-    configure_routes(app)
+    # Instrument FastAPI with Logfire
+    if settings.LOGFIRE_TOKEN:
+        logfire.instrument_fastapi(app)
 
     return app
 
-# Get logger after logging configuration
-logger = logging.getLogger(__name__)
 
 app = create_app()
+
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 async def health_check() -> Dict[str, Any]:
     """Health check endpoint"""
-    status_info = {
+    return {
         "status": "ok",
         "version": APP_VERSION,
         "logfire_enabled": bool(settings.LOGFIRE_TOKEN),
-        "environment": settings.ENVIRONMENT
+        "environment": settings.ENVIRONMENT,
     }
-
-    logger.info("Health check performed", extra=status_info)
-
-    return status_info

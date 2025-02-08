@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field, field_validator
 from app.session_manager import session_manager
 from app.main import settings
 from app.models import PhoneNumber
-from pyrogram import Client
-from pyrogram.raw import functions, types
+from telethon import TelegramClient
+from telethon.tl.types import InputPeerChannel, InputPeerUser, InputPeerChat
 import logging
 import random
 from urllib.parse import urlparse
@@ -50,104 +50,84 @@ class ForwardRequest(BaseModel):
                 }
         raise ValueError(f"Invalid Telegram message link: {link}")
 
-async def safe_join_chat(client: Client, chat: str) -> None:
-    """Safely join a chat without raising exceptions"""
-    try:
-        await client.join_chat(chat)
-    except Exception as e:
-        logger.warning(f"Failed to join chat {chat}: {e}")
-
-@router.post("/messages", status_code=status.HTTP_200_OK)
+@router.post("/")
 async def forward_messages(request: ForwardRequest):
-    """Forward messages with forced chat joining"""
-    source_client = None
+    """Forward messages between chats"""
     try:
-        source_client = await session_manager.get_client(
-            request.source_phone, settings.API_ID, settings.API_HASH
+        client = await session_manager.get_client(
+            request.source_phone,
+            settings.API_ID,
+            settings.API_HASH
         )
 
-        if not request.message_links and not request.message_ids:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No messages to forward provided"
-            )
-
-        # Get source chat from either source_chat or first message link
-        source_chat = request.source_chat
-        message_ids = list(request.message_ids or [])
-
-        # Add message IDs from links if any
-        if request.message_links:
-            for link in request.message_links:
-                try:
-                    parsed = ForwardRequest.validate_telegram_link(link)
-                    # If we got source_chat from source_chat, verify link is from same chat
-                    if isinstance(source_chat, str):
-                        chat_username = source_chat.lstrip('@')
-                        if parsed['username'] != chat_username:
-                            raise HTTPException(
-                                status_code=status.HTTP_400_BAD_REQUEST,
-                                detail="All messages must be from the same chat"
-                            )
-                    else:
-                        source_chat = parsed['username']
-                    message_ids.append(parsed['message_id'])
-                except ValueError as e:
-                    logger.error(f"Invalid link format: {link}")
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-                    ) from e
-
-        # Join source and destination chats
-        await safe_join_chat(source_client, source_chat)
-        await safe_join_chat(source_client, request.destination_chat)
-
-        # Resolve peers
-        source_peer = await source_client.resolve_peer(source_chat)
-        destination_peer = await source_client.resolve_peer(request.destination_chat)
-
-        # Generate random IDs for all messages
-        random_ids = [random.randint(1, 2**31 - 1) for _ in message_ids]
-
-        # Forward all messages in a single call
-        result = await source_client.invoke(
-            functions.messages.ForwardMessages(
-                from_peer=source_peer,
-                id=message_ids,
-                random_id=random_ids,
-                to_peer=destination_peer,
-                drop_author=request.remove_sender_info,
-                drop_media_captions=request.remove_captions,
-                noforwards=request.prevent_further_forwards,
-                silent=request.silent
-            )
-        )
-
-        # Extract forwarded message IDs
-        forwarded_messages = []
-        if hasattr(result, 'updates'):
-            forwarded_messages = [
-                update.id
-                for update in result.updates
-                if hasattr(update, 'id')
-            ]
-
-        if not forwarded_messages:
+        # Get source chat entity
+        try:
+            source_entity = await client.get_entity(request.source_chat)
+        except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No messages were forwarded successfully"
+                detail=f"Source chat not found: {str(e)}"
             )
+
+        # Get destination chat entity
+        try:
+            dest_entity = await client.get_entity(request.destination_chat)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Destination chat not found: {str(e)}"
+            )
+
+        # Handle message links if provided
+        if request.message_links:
+            message_ids = []
+            for link in request.message_links:
+                try:
+                    link_info = ForwardRequest.validate_telegram_link(link)
+                    message_ids.append(link_info['message_id'])
+                except ValueError as e:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(e)
+                    )
+            request.message_ids = message_ids
+
+        if not request.message_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No message IDs provided"
+            )
+
+        # Forward messages
+        forwarded = await client.forward_messages(
+            entity=dest_entity,
+            messages=request.message_ids,
+            from_peer=source_entity,
+            silent=request.silent,
+            noforwards=request.prevent_further_forwards
+        )
+
+        # Handle caption removal if requested
+        if request.remove_captions and forwarded:
+            if not isinstance(forwarded, list):
+                forwarded = [forwarded]
+
+            for msg in forwarded:
+                if msg.media:
+                    await client.edit_message(
+                        dest_entity,
+                        msg.id,
+                        caption=""
+                    )
 
         return {
             "status": "success",
-            "forwarded_message_ids": forwarded_messages
+            "message": f"Successfully forwarded {len(request.message_ids)} messages"
         }
 
     except Exception as e:
-        logger.error(f"Forward operation failed: {str(e)}")
+        logger.error(f"Error forwarding messages: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        ) from e
-    finally:
-        if source_client:
-            await session_manager._cleanup_client(request.source_phone)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to forward messages: {str(e)}"
+        )

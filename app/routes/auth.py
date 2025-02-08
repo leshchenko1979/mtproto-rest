@@ -8,6 +8,7 @@ from app.models import (
     BaseModel,
     CodeVerification
 )
+from app.metrics import track_auth_attempt, track_session_operation
 import logging
 logger = logging.getLogger(__name__)
 
@@ -30,9 +31,11 @@ async def start_auth(request: PhoneNumber):
     """Start Telegram authentication process"""
     try:
         if not settings.API_ID or not settings.API_HASH:
+            error = "API_ID and API_HASH are required. Please check your .env file."
+            track_auth_attempt(request.phone_number, False, error)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="API_ID and API_HASH are required. Please check your .env file."
+                detail=error
             )
 
         status_code, phone_code_hash = await session_manager.start_auth(
@@ -42,6 +45,7 @@ async def start_auth(request: PhoneNumber):
         )
 
         if status_code == "already_authorized":
+            track_auth_attempt(request.phone_number, True, "already_authorized")
             logger.info("Client already authorized")
             return AuthResponse(
                 status="already_authorized",
@@ -49,6 +53,7 @@ async def start_auth(request: PhoneNumber):
                 phone_code_hash=None
             )
         else:
+            track_auth_attempt(request.phone_number, True, "code_sent")
             logger.info(f"Auth code sent to {request.phone_number}")
             return AuthResponse(
                 status="code_sent",
@@ -59,10 +64,12 @@ async def start_auth(request: PhoneNumber):
     except HTTPException:
         raise
     except Exception as e:
+        error = str(e)
+        track_auth_attempt(request.phone_number, False, error)
         logger.exception("Error during authentication start")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail=error
         )
 
 @router.post("/verify-code", status_code=status.HTTP_200_OK, response_model=AuthResponse)
@@ -80,34 +87,42 @@ async def verify_code(verification: CodeVerification):
         )
 
         if status_code == "success":
+            track_session_operation("create", verification.phone_number, True)
             logger.info("Successfully signed in")
             return AuthResponse(
                 status="success",
                 message="Successfully authenticated"
             )
         elif status_code == "2fa_required":
+            track_auth_attempt(verification.phone_number, True, "2fa_required")
             logger.info("Two-factor authentication required")
             return AuthResponse(
                 status="2fa_required",
                 message="Two-factor authentication is required"
             )
         else:
+            error = f"Unexpected authentication status: {status_code}"
+            track_auth_attempt(verification.phone_number, False, error)
             logger.error(f"Unexpected status code during verification: {status_code}")
-            raise ValueError(f"Unexpected authentication status: {status_code}")
+            raise ValueError(error)
 
     except HTTPException:
         raise
     except ValueError as e:
-        logger.error(f"Validation error: {e}")
+        error = str(e)
+        track_auth_attempt(verification.phone_number, False, error)
+        logger.error(f"Validation error: {error}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=error
         )
     except Exception as e:
+        error = str(e)
+        track_auth_attempt(verification.phone_number, False, error)
         logger.exception("Unexpected error during code verification")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Unexpected authentication error: {str(e)}"
+            detail=f"Unexpected authentication error: {error}"
         )
 
 @router.post("/verify-password", status_code=status.HTTP_200_OK, response_model=AuthResponse)
