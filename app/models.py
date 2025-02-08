@@ -1,7 +1,9 @@
-from typing import Optional, Union, Literal, List, Annotated
+from typing import Optional, Union, Literal, List, Annotated, Dict
 from pydantic import BaseModel, field_validator, Field, WithJsonSchema
 from datetime import datetime
 import re
+import base64
+from telethon.sessions import StringSession
 
 # E.164 phone number regex pattern
 PHONE_PATTERN = re.compile(r'^\+?[1-9]\d{1,14}$')
@@ -230,3 +232,66 @@ class CodeVerification(BaseModel):
             ]
         }
     }
+
+class SessionString(BaseModel):
+    """Model for validating Telegram session strings"""
+    value: str = Field(..., description="Telethon session string")
+
+    @field_validator('value')
+    @classmethod
+    def validate_session_string(cls, v: str) -> str:
+        """Validate and normalize session string using Telethon's StringSession"""
+        try:
+            # Remove whitespace and newlines
+            cleaned = ''.join(v.split())
+
+            # Use Telethon's StringSession to validate and normalize
+            session = StringSession(cleaned)
+            return session.save()  # This returns the normalized string
+        except Exception as e:
+            raise ValueError(f"Invalid session string: {str(e)}")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"value": "1ApWapzMBu..."}  # Truncated for brevity
+            ]
+        }
+    }
+
+class StoredSession(BaseModel):
+    """Model for stored session data with validation"""
+    session_string: Optional[str] = None
+    user_id: Optional[int] = None
+    username: Optional[str] = None
+
+    @field_validator('session_string')
+    def validate_session_string(cls, v: Optional[str]) -> Optional[str]:
+        """Validate session string if present"""
+        if v is not None:
+            # Use SessionString model for validation
+            validated = SessionString(value=v)
+            return validated.value
+        return v
+
+    @field_validator('user_id')
+    def validate_user_id(cls, v: Optional[int]) -> Optional[int]:
+        """Validate user ID if present"""
+        if v is not None and v <= 0:
+            raise ValueError("User ID must be positive")
+        return v
+
+    @field_validator('username')
+    def validate_username(cls, v: Optional[str]) -> Optional[str]:
+        """Validate username if present"""
+        if v is not None:
+            # Remove @ prefix if present
+            v = v.lstrip('@')
+            # Check username format
+            if not v.isalnum() and not all(c in v + '_' for c in v):
+                raise ValueError("Invalid username format")
+        return v
+
+class StoredSessions(BaseModel):
+    """Model for the entire sessions file"""
+    sessions: Dict[str, StoredSession]

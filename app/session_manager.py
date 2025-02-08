@@ -23,7 +23,7 @@ from telethon.errors import (
 )
 from fastapi import HTTPException, status
 
-from .models import SessionInfo
+from .models import SessionInfo, PhoneNumber, StoredSession, StoredSessions, SessionString
 from .main import settings
 from .constants import APP_VERSION
 
@@ -40,21 +40,6 @@ logger.addHandler(file_handler)
 
 logger.info("Session manager initialized")
 
-def clean_session_string(session_string: str) -> str:
-    """Clean and validate session string."""
-    # Remove newlines and whitespace
-    cleaned = ''.join(session_string.split())
-
-    # Validate that it's a valid base64 string
-    try:
-        # The session string should be base64 encoded
-        base64.b64decode(cleaned, validate=True)
-        logger.debug(f"Session string validated, length: {len(cleaned)}")
-        return cleaned
-    except Exception as e:
-        logger.error(f"Invalid session string format: {e}")
-        raise ValueError("Invalid session string format") from e
-
 class SessionManager:
     def __init__(self, sessions_dir: str = "sessions"):
         """Initialize session manager"""
@@ -64,29 +49,84 @@ class SessionManager:
         self._load_sessions()
 
     def _load_sessions(self):
-        """Load saved sessions from file"""
+        """Load saved sessions from file with Pydantic validation"""
         try:
             os.makedirs(self._sessions_dir, exist_ok=True)
             session_file = os.path.join(self._sessions_dir, "sessions.json")
             if os.path.exists(session_file):
                 with open(session_file, "r") as f:
-                    self._sessions = json.load(f)
-                logger.info(f"Loaded {len(self._sessions)} sessions from {session_file}")
+                    raw_data = json.load(f)
+                    logger.debug(f"Raw loaded data: {json.dumps(raw_data)}")
+
+                    # Handle both old and new format
+                    sessions_data = raw_data.get("sessions", raw_data)
+                    logger.debug(f"Processing sessions: {list(sessions_data.keys())}")
+
+                    # Create normalized sessions dict
+                    normalized_sessions = {}
+                    for phone, info in sessions_data.items():
+                        try:
+                            # Log raw session data for debugging
+                            logger.debug(f"Processing session for {phone}")
+                            logger.debug(f"Raw session data: {json.dumps(info)}")
+
+                            # Normalize phone number
+                            normalized_phone = PhoneNumber(phone_number=phone).phone_number
+
+                            # Validate session data
+                            session = StoredSession(**info)
+                            logger.debug(f"Validated session data: {session.model_dump_json()}")
+
+                            normalized_sessions[normalized_phone] = session
+                        except Exception as e:
+                            logger.error(f"Error processing session for {phone}: {e}", exc_info=True)
+                            continue
+
+                    # Validate entire sessions structure
+                    stored_sessions = StoredSessions(sessions=normalized_sessions)
+                    self._sessions = {k: v.model_dump() for k, v in stored_sessions.sessions.items()}
+                    logger.info(f"Loaded {len(self._sessions)} sessions from {session_file}")
+                    logger.debug(f"Available phone numbers in memory: {list(self._sessions.keys())}")
             else:
                 logger.info("No existing sessions file found")
+                self._sessions = {}
         except Exception as e:
-            logger.error(f"Error loading sessions: {e}")
+            logger.error(f"Error loading sessions: {e}", exc_info=True)
             self._sessions = {}
 
     def _save_sessions(self):
-        """Save sessions to file"""
+        """Save sessions to file with Pydantic validation"""
         try:
+            # Prepare sessions for saving with validation
+            sessions_to_save = {}
+            for phone, info in self._sessions.items():
+                try:
+                    # Log session data before validation
+                    logger.debug(f"Processing session for saving: {phone}")
+                    logger.debug(f"Raw session data: {json.dumps(info)}")
+
+                    # Normalize phone number
+                    normalized_phone = PhoneNumber(phone_number=phone).phone_number
+
+                    # Validate session data
+                    session = StoredSession(**info)
+                    logger.debug(f"Validated session data: {session.model_dump_json()}")
+
+                    sessions_to_save[normalized_phone] = session
+                except Exception as e:
+                    logger.error(f"Error processing session for {phone}: {e}", exc_info=True)
+                    continue
+
+            # Validate entire structure
+            stored_sessions = StoredSessions(sessions=sessions_to_save)
+
+            # Save validated data
             session_file = os.path.join(self._sessions_dir, "sessions.json")
             with open(session_file, "w") as f:
-                json.dump(self._sessions, f)
-            logger.info(f"Saved {len(self._sessions)} sessions to {session_file}")
+                json.dump(stored_sessions.model_dump(), f, ensure_ascii=False, indent=2)
+            logger.info(f"Saved {len(sessions_to_save)} sessions to {session_file}")
         except Exception as e:
-            logger.error(f"Error saving sessions: {e}")
+            logger.error(f"Error saving sessions: {e}", exc_info=True)
 
     async def _create_client(self, phone_number: str, api_id: int, api_hash: str, session_string: Optional[str] = None) -> TelegramClient:
         """Create a new Telethon client"""
@@ -96,10 +136,14 @@ class SessionManager:
 
             if session_string:
                 try:
-                    # Clean and validate session string
-                    cleaned_session = clean_session_string(session_string)
-                    logger.debug("Session string cleaned and validated")
-                    session = StringSession(cleaned_session)
+                    # Log session string details before validation
+                    logger.debug(f"Raw session string length: {len(session_string)}")
+                    logger.debug(f"Raw session string contains newlines: {'\\n' in session_string}")
+
+                    # Validate session string using the model
+                    validated_session = SessionString(value=session_string)
+                    logger.debug(f"Session string validated, length: {len(validated_session.value)}")
+                    session = StringSession(validated_session.value)
                 except Exception as e:
                     logger.error(f"Failed to process session string: {e}", exc_info=True)
                     raise ValueError(f"Invalid session string: {str(e)}") from e
@@ -168,18 +212,30 @@ class SessionManager:
 
     async def get_client(self, phone_number: str, api_id: int, api_hash: str) -> TelegramClient:
         """Get a client for operations, creating a new one if needed"""
-        session = self._sessions.get(phone_number)
+        # Normalize phone number using the model
+        normalized_phone = PhoneNumber(phone_number=phone_number).phone_number
+        logger.debug(f"Normalized phone number: {normalized_phone}")
+        logger.debug(f"Available sessions: {list(self._sessions.keys())}")
+        logger.debug(f"Sessions data: {json.dumps(self._sessions, indent=2)}")
+
+        session = self._sessions.get(normalized_phone)
         if not session or not session.get("session_string"):
+            logger.error(f"Session not found in memory for {normalized_phone}")
+            logger.debug(f"Session lookup result: {session}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Session not found for {phone_number}. Please authenticate first."
+                detail=f"Session not found for {normalized_phone}. Please authenticate first."
             )
 
-        await self._cleanup_client(phone_number)
+        logger.debug(f"Found session in memory for {normalized_phone}")
+        session_string = session.get("session_string")
+        logger.debug(f"Session string length: {len(session_string) if session_string else 0}")
+
+        await self._cleanup_client(normalized_phone)
 
         try:
-            client = await self._create_client(phone_number, api_id, api_hash, session["session_string"])
-            self._clients[phone_number] = client
+            client = await self._create_client(normalized_phone, api_id, api_hash, session_string)
+            self._clients[normalized_phone] = client
             return client
         except Exception as e:
             logger.error(f"Error creating client: {e}")
@@ -191,28 +247,31 @@ class SessionManager:
     async def start_auth(self, phone_number: str, api_id: int, api_hash: str) -> Tuple[str, Optional[str]]:
         """Start authentication process"""
         try:
+            # Normalize phone number using the model
+            normalized_phone = PhoneNumber(phone_number=phone_number).phone_number
+
             # Check if already authorized
-            if phone_number in self._sessions and self._sessions[phone_number].get("session_string"):
-                logger.info(f"Authentication skipped: Client {phone_number} already authorized")
+            if normalized_phone in self._sessions and self._sessions[normalized_phone].get("session_string"):
+                logger.info(f"Authentication skipped: Client {normalized_phone} already authorized")
                 return "already_authorized", None
 
-            logger.debug(f"Cleaning up any existing client for {phone_number}")
-            await self._cleanup_client(phone_number)
+            logger.debug(f"Cleaning up any existing client for {normalized_phone}")
+            await self._cleanup_client(normalized_phone)
 
-            logger.info(f"Initiating authentication for {phone_number}")
+            logger.info(f"Initiating authentication for {normalized_phone}")
             logger.debug(f"Creating client with API ID: {api_id}")
-            client = await self._create_client(phone_number, api_id, api_hash)
+            client = await self._create_client(normalized_phone, api_id, api_hash)
 
             try:
                 # Check if already authorized
                 logger.debug("Checking if client is already authorized")
                 if await client.is_user_authorized():
-                    logger.info(f"Client {phone_number} was already authorized")
+                    logger.info(f"Client {normalized_phone} was already authorized")
                     logger.debug("Getting user info")
                     me = await client.get_me()
                     logger.debug("Getting session string")
                     session_string = client.session.save()
-                    self._sessions[phone_number] = {
+                    self._sessions[normalized_phone] = {
                         "session_string": session_string,
                         "user_id": me.id,
                         "username": getattr(me, 'username', None)
@@ -222,15 +281,15 @@ class SessionManager:
                     return "already_authorized", None
 
                 # Not authorized, send code
-                logger.debug(f"Starting send code process for {phone_number}")
-                sent_code = await client.send_code_request(phone_number)
-                logger.info(f"Authentication code sent successfully to {phone_number}")
+                logger.debug(f"Starting send code process for {normalized_phone}")
+                sent_code = await client.send_code_request(normalized_phone)
+                logger.info(f"Authentication code sent successfully to {normalized_phone}")
                 logger.debug(f"Phone code hash received: {sent_code.phone_code_hash[:8]}...")
 
                 # Store client for later use
                 logger.debug("Storing client and initializing session")
-                self._clients[phone_number] = client
-                self._sessions[phone_number] = {
+                self._clients[normalized_phone] = client
+                self._sessions[normalized_phone] = {
                     "session_string": None,
                     "user_id": None,
                     "username": None
@@ -241,7 +300,7 @@ class SessionManager:
 
             except Exception as e:
                 logger.error(f"Error in authentication process: {e}", exc_info=True)
-                await self._cleanup_client(phone_number)
+                await self._cleanup_client(normalized_phone)
                 raise
 
         except Exception as e:
@@ -255,18 +314,23 @@ class SessionManager:
 
     async def complete_auth(self, phone_number: str, code: str, phone_code_hash: str) -> SessionInfo:
         """Complete the authentication process with the received code"""
-        if phone_number not in self._clients:
+        # Normalize phone number using the model
+        normalized_phone = PhoneNumber(phone_number=phone_number).phone_number
+
+        if normalized_phone not in self._clients:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No pending authentication found for this phone number"
             )
 
-        client = self._clients[phone_number]
+        client = self._clients[normalized_phone]
+        needs_2fa = False
         try:
             # Sign in with code
             try:
-                user = await client.sign_in(phone_number, code, phone_code_hash=phone_code_hash)
+                user = await client.sign_in(normalized_phone, code, phone_code_hash=phone_code_hash)
             except SessionPasswordNeededError as e:
+                needs_2fa = True
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="2FA password required"
@@ -281,7 +345,7 @@ class SessionManager:
             session = StringSession.save(client.session)
             logger.debug(f"Created new Telethon session string, length: {len(session)}")
 
-            self._sessions[phone_number] = {
+            self._sessions[normalized_phone] = {
                 "session_string": session,
                 "user_id": user.id,
                 "username": user.username
@@ -289,7 +353,7 @@ class SessionManager:
             self._save_sessions()
 
             return SessionInfo(
-                phone_number=phone_number,
+                phone_number=normalized_phone,
                 session_string=session,
                 user_id=user.id,
                 username=user.username
@@ -304,24 +368,29 @@ class SessionManager:
                 ) from e
             raise
         finally:
-            await self._cleanup_client(phone_number)
+            # Only cleanup if we don't need 2FA
+            if not needs_2fa:
+                await self._cleanup_client(normalized_phone)
 
     async def complete_2fa(self, phone_number: str, password: str) -> SessionInfo:
         """Complete two-factor authentication with password"""
-        if phone_number not in self._clients:
+        # Normalize phone number using the model
+        normalized_phone = PhoneNumber(phone_number=phone_number).phone_number
+
+        if normalized_phone not in self._clients:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No pending authentication found for this phone number"
             )
 
-        client = self._clients[phone_number]
+        client = self._clients[normalized_phone]
         try:
             # Sign in with 2FA password
             user = await client.sign_in(password=password)
 
             # Get session string and user info
             session_string = client.session.save()
-            self._sessions[phone_number] = {
+            self._sessions[normalized_phone] = {
                 "session_string": session_string,
                 "user_id": user.id,
                 "username": user.username
@@ -329,7 +398,7 @@ class SessionManager:
             self._save_sessions()
 
             return SessionInfo(
-                phone_number=phone_number,
+                phone_number=normalized_phone,
                 session_string=session_string,
                 user_id=user.id,
                 username=user.username
@@ -342,13 +411,13 @@ class SessionManager:
                 detail=f"Failed to complete 2FA: {str(e)}"
             ) from e
         finally:
-            await self._cleanup_client(phone_number)
+            await self._cleanup_client(normalized_phone)
 
     async def list_sessions(self) -> List[SessionInfo]:
         """List all active sessions"""
         return [
             SessionInfo(
-                phone_number=phone,
+                phone_number=PhoneNumber(phone_number=phone).phone_number,
                 session_string=info["session_string"],
                 user_id=info["user_id"],
                 username=info.get("username")
@@ -359,14 +428,17 @@ class SessionManager:
 
     async def remove_session(self, phone_number: str) -> dict:
         """Remove a session and clean up all associated clients"""
-        if phone_number not in self._sessions:
+        # Normalize phone number using the model
+        normalized_phone = PhoneNumber(phone_number=phone_number).phone_number
+
+        if normalized_phone not in self._sessions:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Session not found"
             )
 
-        await self._cleanup_client(phone_number)
-        del self._sessions[phone_number]
+        await self._cleanup_client(normalized_phone)
+        del self._sessions[normalized_phone]
         self._save_sessions()
 
         return {"message": "Session removed successfully"}

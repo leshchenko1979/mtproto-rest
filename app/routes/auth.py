@@ -80,33 +80,27 @@ async def verify_code(verification: CodeVerification):
         logger.info(f"Attempting to verify code for {verification.phone_number}")
         logger.debug(f"Code verification details - Code: {verification.code}, Phone Code Hash: {verification.phone_code_hash}")
 
-        status_code = await session_manager.verify_code(
+        session_info = await session_manager.complete_auth(
             verification.phone_number,
             verification.code,
             verification.phone_code_hash
         )
 
-        if status_code == "success":
-            track_session_operation("create", verification.phone_number, True)
-            logger.info("Successfully signed in")
-            return AuthResponse(
-                status="success",
-                message="Successfully authenticated"
-            )
-        elif status_code == "2fa_required":
+        track_session_operation("create", verification.phone_number, True)
+        logger.info("Successfully signed in")
+        return AuthResponse(
+            status="success",
+            message="Successfully authenticated"
+        )
+
+    except HTTPException as e:
+        if "2FA password required" in str(e):
             track_auth_attempt(verification.phone_number, True, "2fa_required")
             logger.info("Two-factor authentication required")
             return AuthResponse(
                 status="2fa_required",
                 message="Two-factor authentication is required"
             )
-        else:
-            error = f"Unexpected authentication status: {status_code}"
-            track_auth_attempt(verification.phone_number, False, error)
-            logger.error(f"Unexpected status code during verification: {status_code}")
-            raise ValueError(error)
-
-    except HTTPException:
         raise
     except ValueError as e:
         error = str(e)
@@ -129,10 +123,12 @@ async def verify_code(verification: CodeVerification):
 async def verify_password(verification: PasswordVerification):
     """Complete 2FA authentication"""
     try:
-        await session_manager.verify_password(
+        session_info = await session_manager.complete_2fa(
             verification.phone_number,
             verification.password
         )
+        track_session_operation("create", verification.phone_number, True)
+        logger.info("Successfully completed 2FA authentication")
         return AuthResponse(
             status="success",
             message="Successfully authenticated"
@@ -140,6 +136,8 @@ async def verify_password(verification: PasswordVerification):
     except HTTPException:
         raise
     except Exception as e:
+        error = str(e)
+        track_auth_attempt(verification.phone_number, False, error)
         logger.exception("Error during password verification")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
